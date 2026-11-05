@@ -62,8 +62,11 @@ int Aeron_WindowInit(const AeronConfig* config) {
 	 * is point-sized and the OS upscales — visibly soft output. All
 	 * Aeron mouse/window math stays in points; only Aeron_Present's
 	 * swapchain-measured presentation rect sees pixels. */
+	g_aeron.headless = config && config->headless;
 	g_aeron.window =
-		SDL_CreateWindow(title, width, height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+		SDL_CreateWindow(title, width, height,
+						 SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
+							 (g_aeron.headless ? SDL_WINDOW_HIDDEN : 0));
 	if (!g_aeron.window) {
 		Aeron_LogError("aeron", "SDL_CreateWindow failed: %s", SDL_GetError());
 		return 0;
@@ -402,3 +405,4 @@ void Aeron_ComputePresentationRect(int container_width, int container_height, SD
 	rect->x = (container_width - rect->w) / 2;
 	rect->y = (container_height - rect->h) / 2;
 }
+

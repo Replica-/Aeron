@@ -133,7 +133,7 @@ int32_t Aeron_BeginFrame(void) {
 	SDL_GetWindowSize(g_aeron.window, &g_aeron.input.window_width, &g_aeron.input.window_height);
 	Aeron_ComputePresentationRect(g_aeron.input.window_width, g_aeron.input.window_height, &content_rect);
 	window_flags            = SDL_GetWindowFlags(g_aeron.window);
-	g_aeron.input.has_focus = (window_flags & SDL_WINDOW_INPUT_FOCUS) != 0;
+	g_aeron.input.has_focus = g_aeron.headless || (window_flags & SDL_WINDOW_INPUT_FOCUS) != 0;
 	has_platform_position   = Aeron_UpdateRawMouseFromPlatform(&g_aeron.input);
 	has_mouse_position      = has_platform_position && Aeron_RawMouseInsideWindow(&g_aeron.input);
 	Aeron_UpdateLogicalMouse(&g_aeron.input, &content_rect, has_mouse_position);

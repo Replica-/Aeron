@@ -150,7 +150,7 @@ void Aeron_HandleEvent(const SDL_Event* event) {
 			g_aeron.input.has_focus = 1;
 			break;
 		case SDL_EVENT_WINDOW_FOCUS_LOST:
-			g_aeron.input.has_focus = 0;
+			g_aeron.input.has_focus = g_aeron.headless;
 			Aeron_ReleaseAllKeys(&g_aeron.input);
 			g_aeron.input.mouse.buttons = 0;
 			break;

@@ -63,6 +63,10 @@ int Aeron_Init(const AeronConfig* config) {
 	}
 #endif
 
+	/* Headless runs must not reach the speakers; the dummy driver discards samples. */
+	if (config && config->headless)
+		SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
+
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD)) {
 		Aeron_LogError("aeron", "SDL_Init failed: %s", SDL_GetError());
 		return 0;

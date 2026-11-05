@@ -47,6 +47,9 @@ typedef struct AeronConfig {
 	 * Dock icon with this lower-resolution image. */
 	const void* window_icon_bmp;
 	size_t      window_icon_bmp_size;
+	/* Create the window hidden and treat it as always focused (no visible
+	 * output; for automated runs). */
+	int headless;
 	/* Window size in logical points. <= 0 auto-sizes to ~90% of the
 	 * primary display's usable area, locked to the logical aspect. */
 	int                   window_width;

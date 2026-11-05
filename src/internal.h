@@ -197,6 +197,7 @@ typedef struct AeronControllerDevice {
 typedef struct AeronRuntime {
 	int                         initialized;
 	int                         quit_requested;
+	int                         headless;
 	int                         fatal_error_requested;
 	SDL_Window*                 window;
 	SDL_GPUDevice*              gpu_device;
