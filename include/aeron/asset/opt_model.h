@@ -20,6 +20,10 @@ typedef struct AeronOptModelBuildOptions {
 	bool                                emissive;
 	const struct AeronOptAlphaOverride* alpha_overrides;
 	size_t                              alpha_override_count;
+	int                                 max_atlas_size; /* 0 = cook default */
+	/* Builds only meshes [mesh_first, mesh_first + mesh_count); 0 = all. */
+	int                                 mesh_first;
+	int                                 mesh_count;
 } AeronOptModelBuildOptions;
 
 typedef struct AeronOptAlphaOverride {

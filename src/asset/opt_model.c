@@ -285,6 +285,15 @@ bool Aeron_OptModelBuildMemory(const void* bytes, size_t size, const char* label
 	opt_file_t* source       = opt_load_memory(bytes, size, &parser_error);
 	if (!source)
 		return opt_model_error(error, 2, parser_error.msg);
+	opt_file_t view = *source;
+	if (options->mesh_count > 0) {
+		if (options->mesh_first < 0 || options->mesh_first + options->mesh_count > source->mesh_count) {
+			opt_free(source);
+			return opt_model_error(error, 1, "OPT mesh range out of bounds");
+		}
+		view.meshes += options->mesh_first;
+		view.mesh_count = options->mesh_count;
+	}
 
 	OptGltfAlphaOverride* alpha_overrides = NULL;
 	if (options->alpha_override_count) {
@@ -307,13 +316,13 @@ bool Aeron_OptModelBuildMemory(const void* bytes, size_t size, const char* label
 		.alpha_override_count = options->alpha_override_count,
 	};
 	OptGltfDocument* document  = NULL;
-	const bool       converted = OptGltf_BuildMemory(source, label, &build_options, &document, &parser_error);
+	const bool       converted = OptGltf_BuildMemory(&view, label, &build_options, &document, &parser_error);
 	free(alpha_overrides);
 	if (!converted) {
 		opt_free(source);
 		return opt_model_error(error, 3, parser_error.msg);
 	}
-	if (!build_opt_semantics(source, out)) {
+	if (!build_opt_semantics(&view, out)) {
 		OptGltf_Free(document);
 		opt_free(source);
 		Aeron_FlightModelFree(out);
@@ -324,6 +333,8 @@ bool Aeron_OptModelBuildMemory(const void* bytes, size_t size, const char* label
 	cook_options.encoding           = AERON_GLTF_COOK_ENCODING_RGBA8;
 	cook_options.zstd_supercompress = false;
 	cook_options.verbose            = false;
+	if (options->max_atlas_size > 0)
+		cook_options.max_atlas_size = options->max_atlas_size;
 	OptModelCookContext context     = { .document = document, .model = out, .label = label };
 	const bool          cooked = aeron_gltf_cook_data(OptGltf_Data(document), label, opt_model_image_provider,
 													  &context, opt_model_consumer, &context, &cook_options);
