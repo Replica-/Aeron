@@ -169,7 +169,7 @@ static int Aeron_LoadBuiltinShaders(void) {
 				  SDL_GetGPUDeviceDriver(g_aeron.gpu_device));
 
 	g_aeron.fullscreen_vertex_shader =
-		Aeron_LoadShader("fullscreen.vert", SDL_GPU_SHADERSTAGE_VERTEX, format_info, 0, 0, 0);
+		Aeron_LoadShader("fullscreen.vert", SDL_GPU_SHADERSTAGE_VERTEX, format_info, 0, 1, 0);
 	g_aeron.fullscreen_fragment_shader =
 		Aeron_LoadShader("fullscreen.frag", SDL_GPU_SHADERSTAGE_FRAGMENT, format_info, 1, 1, 0);
 
@@ -1384,24 +1384,35 @@ static int Aeron_DrawTexture(SDL_GPUCommandBuffer* command_buffer, SDL_GPURender
 	 * hanging past an edge (e.g. a cursor layer whose hotspot-centered
 	 * sprite crosses the window's left/top border) would otherwise
 	 * yield a negative-origin scissor and the draw gets rejected.
-	 * Clamp the scissor to the target; the viewport keeps the full
-	 * unclamped dst rect so the quad's mapping is unchanged and the
-	 * scissor merely crops it. */
+	 * Clamp the scissor to the target. The viewport must lie within the
+	 * target too, so it is clamped the same way and the vertex shader
+	 * samples only the matching part of the texture, which keeps the
+	 * quad's mapping unchanged. */
+	SDL_Rect visible = *dst_rect;
 	if (target_w > 0 && target_h > 0) {
 		SDL_Rect target_rect = { 0, 0, target_w, target_h };
-		if (!SDL_GetRectIntersection(&scissor, &target_rect, &scissor)) {
+		if (!SDL_GetRectIntersection(&scissor, &target_rect, &scissor) ||
+			!SDL_GetRectIntersection(dst_rect, &target_rect, &visible)) {
 			return 1; /* fully off-target */
 		}
 	}
+	const float uv_rect[4] = {
+		(float)(visible.x - dst_rect->x) / (float)dst_rect->w,
+		(float)(visible.y - dst_rect->y) / (float)dst_rect->h,
+		(float)visible.w / (float)dst_rect->w,
+		(float)visible.h / (float)dst_rect->h,
+	};
 
 	SDL_BindGPUGraphicsPipeline(render_pass, pipeline);
 	SDL_BindGPUFragmentSamplers(render_pass, 0, &binding, 1);
+	SDL_PushGPUVertexUniformData(command_buffer, 0, uv_rect, sizeof(uv_rect));
+	Aeron_RecordUniformPush(sizeof(uv_rect));
 	SDL_PushGPUFragmentUniformData(command_buffer, 0, fragment_uniform, sizeof(fragment_uniform));
 	Aeron_RecordUniformPush(sizeof(fragment_uniform));
-	viewport.x         = (float)dst_rect->x;
-	viewport.y         = (float)dst_rect->y;
-	viewport.w         = (float)dst_rect->w;
-	viewport.h         = (float)dst_rect->h;
+	viewport.x         = (float)visible.x;
+	viewport.y         = (float)visible.y;
+	viewport.w         = (float)visible.w;
+	viewport.h         = (float)visible.h;
 	viewport.min_depth = 0.0f;
 	viewport.max_depth = 1.0f;
 	SDL_SetGPUViewport(render_pass, &viewport);
