@@ -121,7 +121,9 @@ static inline void rgb565_to_rgb8(uint16_t w, uint8_t* r, uint8_t* g, uint8_t* b
 
 /* Decode the base mip of an OPT texture into RGBA8 at the given palette
  * shade row (the file's base-color row; see opt_palette_base_shade).
- * Caller owns the returned buffer. Returns NULL on bad inputs. */
+ * 32bpp textures ignore the shade and keep their authored B,G,R,A color;
+ * their alpha is t->alpha (set only with the texture's alpha flag), else
+ * opaque. Caller owns the returned buffer. Returns NULL on bad inputs. */
 static uint8_t* decode_texture_rgba8(const opt_texture_t* t, int shade) {
 	if (!t || !t->pixels || t->width <= 0 || t->height <= 0)
 		return NULL;
@@ -129,6 +131,15 @@ static uint8_t* decode_texture_rgba8(const opt_texture_t* t, int shade) {
 	uint8_t*     out        = (uint8_t*)malloc(base_bytes * 4);
 	if (!out)
 		return NULL;
+	if (t->bytes_per_texel == 4) {
+		for (size_t i = 0; i < base_bytes; ++i) {
+			out[i * 4 + 0] = t->pixels[i * 4 + 2];
+			out[i * 4 + 1] = t->pixels[i * 4 + 1];
+			out[i * 4 + 2] = t->pixels[i * 4 + 0];
+			out[i * 4 + 3] = t->alpha ? t->alpha[i] : 255;
+		}
+		return out;
+	}
 	const uint8_t* src = t->pixels;
 	const uint8_t* pal = t->palette + ((size_t)shade * OPT_PALETTE_COLORS * OPT_PALETTE_BPP);
 	for (size_t i = 0; i < base_bytes; ++i) {
@@ -162,6 +173,10 @@ static uint8_t* decode_texture_rgba8(const opt_texture_t* t, int shade) {
 static uint8_t* decode_texture_emissive_rgba8(const opt_file_t* opt, const opt_texture_t* t, int shade,
 											  int tol) {
 	if (!t || !t->pixels || t->width <= 0 || t->height <= 0)
+		return NULL;
+	/* The classifiers read the palette; a 32bpp texture has none (its
+	 * illumination is a separate plane, t->illum). */
+	if (t->bytes_per_texel == 4)
 		return NULL;
 	const int xwa = opt && opt->version >= 5;
 	if (xwa && t->name[0] == '_') {
@@ -1131,16 +1146,13 @@ bool OptGltf_BuildMemory(const opt_file_t* opt, const char* basename, const OptG
 			continue;
 		const opt_mesh_t* m   = &opt->meshes[mi];
 		const opt_lod_t*  lod = &m->lods[0];
-		/* 3 vertex-attribute streams (pos/nrm/uv): 3 views + 3 accessors. */
-		total_views += 3;
-		total_accs += 3;
 		for (int32_t g = 0; g < lod->group_count; ++g) {
 			if (built[mi].fg_index_count_arr[g] == 0)
 				continue;
 			total_prims++;
 			total_attrs += 3; /* POSITION, NORMAL, TEXCOORD_0 */
-			total_views += 1; /* index buffer view */
-			total_accs += 1;  /* index accessor */
+			total_views += 4; /* pos/nrm/uv streams + index buffer */
+			total_accs += 4;
 			int sc = lod->groups[g].state_count;
 			if (sc > 1)
 				total_maps += max_state_count;
@@ -1172,46 +1184,26 @@ bool OptGltf_BuildMemory(const opt_file_t* opt, const char* basename, const OptG
 		mesh->name             = gb_keep_string(
 			build, xprintf_dup("Mesh%02d_%s", (int)mi, opt_mesh_type_name(m->descriptor.mesh_type)));
 
-		/* Vertex stream: positions / normals / uvs. */
-		size_t pos_off = bin_append(build, NULL, 0);
-		/* compute min/max for POSITION accessor */
-		float pmin[3] = { +INFINITY, +INFINITY, +INFINITY };
-		float pmax[3] = { -INFINITY, -INFINITY, -INFINITY };
-		for (uint32_t i = 0; i < bm->vertex_count; ++i) {
-			const float* p = bm->vertices[i].pos;
-			for (int k = 0; k < 3; ++k) {
-				if (p[k] < pmin[k])
-					pmin[k] = p[k];
-				if (p[k] > pmax[k])
-					pmax[k] = p[k];
-			}
+		/* Each face group gets its own vertex streams holding only the
+		 * vertices it uses. Sharing the mesh's whole vertex pool would repeat
+		 * that pool once per primitive in the merged model. */
+		uint32_t* remap      = (uint32_t*)malloc(bm->vertex_count * sizeof *remap);
+		uint32_t* used       = (uint32_t*)malloc(bm->vertex_count * sizeof *used);
+		uint16_t* local_idx  = NULL;
+		uint32_t  max_ic     = 0;
+		for (int32_t g = 0; g < lod->group_count; ++g)
+			if (bm->fg_index_count_arr[g] > max_ic)
+				max_ic = bm->fg_index_count_arr[g];
+		local_idx = (uint16_t*)malloc((max_ic ? max_ic : 1) * sizeof *local_idx);
+		if (!remap || !used || !local_idx) {
+			free(remap);
+			free(used);
+			free(local_idx);
+			fprintf(stderr, "opt2gltf: oom (primitive vertices)\n");
+			goto fail;
 		}
 		for (uint32_t i = 0; i < bm->vertex_count; ++i)
-			bin_append(build, bm->vertices[i].pos, sizeof bm->vertices[i].pos);
-		size_t             pos_bytes = bm->vertex_count * sizeof bm->vertices[0].pos;
-		cgltf_buffer_view* pos_view = gb_new_view(build, pos_off, pos_bytes, cgltf_buffer_view_type_vertices);
-		cgltf_accessor*    pos_acc =
-			gb_new_accessor(build, pos_view, bm->vertex_count, cgltf_type_vec3, cgltf_component_type_r_32f);
-		pos_acc->has_min = 1;
-		pos_acc->has_max = 1;
-		memcpy(pos_acc->min, pmin, sizeof pmin);
-		memcpy(pos_acc->max, pmax, sizeof pmax);
-
-		size_t nrm_off = bin_append(build, NULL, 0);
-		for (uint32_t i = 0; i < bm->vertex_count; ++i)
-			bin_append(build, bm->vertices[i].nrm, sizeof bm->vertices[i].nrm);
-		size_t             nrm_bytes = bm->vertex_count * sizeof bm->vertices[0].nrm;
-		cgltf_buffer_view* nrm_view = gb_new_view(build, nrm_off, nrm_bytes, cgltf_buffer_view_type_vertices);
-		cgltf_accessor*    nrm_acc =
-			gb_new_accessor(build, nrm_view, bm->vertex_count, cgltf_type_vec3, cgltf_component_type_r_32f);
-
-		size_t uv_off = bin_append(build, NULL, 0);
-		for (uint32_t i = 0; i < bm->vertex_count; ++i)
-			bin_append(build, bm->vertices[i].uv, sizeof bm->vertices[i].uv);
-		size_t             uv_bytes = bm->vertex_count * sizeof bm->vertices[0].uv;
-		cgltf_buffer_view* uv_view  = gb_new_view(build, uv_off, uv_bytes, cgltf_buffer_view_type_vertices);
-		cgltf_accessor*    uv_acc =
-			gb_new_accessor(build, uv_view, bm->vertex_count, cgltf_type_vec2, cgltf_component_type_r_32f);
+			remap[i] = UINT32_MAX;
 
 		/* One primitive per face group with indices. */
 		size_t           mesh_prim_count  = 0;
@@ -1222,8 +1214,59 @@ bool OptGltf_BuildMemory(const opt_file_t* opt, const char* basename, const OptG
 				continue;
 			const opt_face_group_t* grp = &lod->groups[g];
 
+			uint32_t used_count = 0;
+			for (uint32_t k = 0; k < ic; ++k) {
+				const uint32_t v = bm->indices[bm->fg_index_start[g] + k];
+				if (remap[v] == UINT32_MAX) {
+					remap[v]           = used_count;
+					used[used_count++] = v;
+				}
+				local_idx[k] = (uint16_t)remap[v];
+			}
+			for (uint32_t k = 0; k < used_count; ++k)
+				remap[used[k]] = UINT32_MAX;
+
+			/* Vertex streams: positions / normals / uvs. */
+			float pmin[3] = { +INFINITY, +INFINITY, +INFINITY };
+			float pmax[3] = { -INFINITY, -INFINITY, -INFINITY };
+			size_t pos_off = bin_append(build, NULL, 0);
+			for (uint32_t k = 0; k < used_count; ++k) {
+				const float* p = bm->vertices[used[k]].pos;
+				for (int c = 0; c < 3; ++c) {
+					if (p[c] < pmin[c])
+						pmin[c] = p[c];
+					if (p[c] > pmax[c])
+						pmax[c] = p[c];
+				}
+				bin_append(build, p, sizeof bm->vertices[0].pos);
+			}
+			cgltf_buffer_view* pos_view = gb_new_view(build, pos_off, used_count * sizeof bm->vertices[0].pos,
+													  cgltf_buffer_view_type_vertices);
+			cgltf_accessor*    pos_acc =
+				gb_new_accessor(build, pos_view, used_count, cgltf_type_vec3, cgltf_component_type_r_32f);
+			pos_acc->has_min = 1;
+			pos_acc->has_max = 1;
+			memcpy(pos_acc->min, pmin, sizeof pmin);
+			memcpy(pos_acc->max, pmax, sizeof pmax);
+
+			size_t nrm_off = bin_append(build, NULL, 0);
+			for (uint32_t k = 0; k < used_count; ++k)
+				bin_append(build, bm->vertices[used[k]].nrm, sizeof bm->vertices[0].nrm);
+			cgltf_buffer_view* nrm_view = gb_new_view(build, nrm_off, used_count * sizeof bm->vertices[0].nrm,
+													  cgltf_buffer_view_type_vertices);
+			cgltf_accessor*    nrm_acc =
+				gb_new_accessor(build, nrm_view, used_count, cgltf_type_vec3, cgltf_component_type_r_32f);
+
+			size_t uv_off = bin_append(build, NULL, 0);
+			for (uint32_t k = 0; k < used_count; ++k)
+				bin_append(build, bm->vertices[used[k]].uv, sizeof bm->vertices[0].uv);
+			cgltf_buffer_view* uv_view = gb_new_view(build, uv_off, used_count * sizeof bm->vertices[0].uv,
+													 cgltf_buffer_view_type_vertices);
+			cgltf_accessor*    uv_acc =
+				gb_new_accessor(build, uv_view, used_count, cgltf_type_vec2, cgltf_component_type_r_32f);
+
 			/* Indices for this face group. */
-			size_t idx_off = bin_append(build, bm->indices + bm->fg_index_start[g], ic * sizeof(uint16_t));
+			size_t idx_off = bin_append(build, local_idx, ic * sizeof(uint16_t));
 			cgltf_buffer_view* idx_view =
 				gb_new_view(build, idx_off, ic * sizeof(uint16_t), cgltf_buffer_view_type_indices);
 			cgltf_accessor* idx_acc =
@@ -1282,6 +1325,9 @@ bool OptGltf_BuildMemory(const opt_file_t* opt, const char* basename, const OptG
 			}
 			mesh_prim_count++;
 		}
+		free(remap);
+		free(used);
+		free(local_idx);
 		mesh->primitives       = mesh_prims_start;
 		mesh->primitives_count = mesh_prim_count;
 	}

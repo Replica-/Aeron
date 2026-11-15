@@ -20,6 +20,10 @@ typedef struct AeronOptModelBuildOptions {
 	bool                                emissive;
 	const struct AeronOptAlphaOverride* alpha_overrides;
 	size_t                              alpha_override_count;
+	/* PBR values by texture name; an entry with a NULL name applies to
+	 * every texture without its own entry. */
+	const struct AeronOptMaterialOverride* material_overrides;
+	size_t                                 material_override_count;
 	int                                 max_atlas_size; /* 0 = cook default */
 	/* Builds only meshes [mesh_first, mesh_first + mesh_count); 0 = all. */
 	int                                 mesh_first;
@@ -31,6 +35,13 @@ typedef struct AeronOptAlphaOverride {
 	AeronGltfAlphaMode alpha_mode;
 	float              alpha_cutoff;
 } AeronOptAlphaOverride;
+
+typedef struct AeronOptMaterialOverride {
+	const char* texture_name;
+	float       metallic;  /* 0..1 */
+	float       roughness; /* 0..1 */
+	bool        shadeless; /* drawn at full brightness, unaffected by lighting */
+} AeronOptMaterialOverride;
 
 typedef struct AeronOptModelError {
 	int  code;

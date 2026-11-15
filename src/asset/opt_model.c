@@ -63,7 +63,58 @@ static bool opt_model_arguments_valid(const char* label, const AeronOptModelBuil
 			override->alpha_cutoff > 1.0f)
 			return false;
 	}
+	if (options->material_override_count && !options->material_overrides)
+		return false;
+	for (size_t index = 0; index < options->material_override_count; ++index) {
+		const AeronOptMaterialOverride* override = &options->material_overrides[index];
+		if (!isfinite(override->metallic) || override->metallic < 0.0f || override->metallic > 1.0f ||
+			!isfinite(override->roughness) || override->roughness < 0.0f || override->roughness > 1.0f)
+			return false;
+	}
 	return true;
+}
+
+static bool opt_model_name_equal(const char* left, const char* right) {
+	for (; *left && *right; ++left, ++right) {
+		char a = *left, b = *right;
+		if (a >= 'a' && a <= 'z')
+			a = (char)(a - 'a' + 'A');
+		if (b >= 'a' && b <= 'z')
+			b = (char)(b - 'a' + 'A');
+		if (a != b)
+			return false;
+	}
+	return *left == *right;
+}
+
+/* opt2gltf makes material i for texture i. */
+static void opt_model_apply_material_overrides(const opt_file_t* opt, cgltf_data* data,
+											   const AeronOptModelBuildOptions* options) {
+	for (int32_t index = 0; index < opt->texture_count && (size_t)index < data->materials_count; ++index) {
+		const AeronOptMaterialOverride* match = NULL;
+		for (size_t o = 0; o < options->material_override_count; ++o) {
+			const AeronOptMaterialOverride* override = &options->material_overrides[o];
+			if (!override->texture_name) {
+				if (!match)
+					match = override;
+			} else if (opt_model_name_equal(override->texture_name, opt->textures[index].name)) {
+				match = override;
+				break;
+			}
+		}
+		if (!match)
+			continue;
+		cgltf_material* material = &data->materials[index];
+		material->pbr_metallic_roughness.metallic_factor = match->metallic;
+		material->pbr_metallic_roughness.roughness_factor = match->roughness;
+		if (match->shadeless && material->pbr_metallic_roughness.base_color_texture.texture) {
+			material->emissive_texture = material->pbr_metallic_roughness.base_color_texture;
+			material->emissive_factor[0] = 1.0f;
+			material->emissive_factor[1] = 1.0f;
+			material->emissive_factor[2] = 1.0f;
+			material->extras.data = NULL;
+		}
+	}
 }
 
 static AeronFlightVec3 opt_position(const opt_vec3_t* source) {
@@ -322,6 +373,8 @@ bool Aeron_OptModelBuildMemory(const void* bytes, size_t size, const char* label
 		opt_free(source);
 		return opt_model_error(error, 3, parser_error.msg);
 	}
+	if (options->material_override_count)
+		opt_model_apply_material_overrides(&view, OptGltf_Data(document), options);
 	if (!build_opt_semantics(&view, out)) {
 		OptGltf_Free(document);
 		opt_free(source);

@@ -294,6 +294,10 @@ int Aeron_GetPresentationPixelSize(int* width, int* height) {
 }
 
 int Aeron_SetHostCursorVisible(int visible) {
+	/* A headless run has no window of its own and leaves the host cursor alone. */
+	if (g_aeron.headless) {
+		return 1;
+	}
 	if (visible) {
 		return SDL_ShowCursor() ? 1 : 0;
 	}
@@ -320,7 +324,9 @@ int Aeron_WarpMouseLogical(int x, int y) {
 
 	raw_x = content_rect.x + (int)(((int64_t)x * content_rect.w) / g_aeron.logical_width);
 	raw_y = content_rect.y + (int)(((int64_t)y * content_rect.h) / g_aeron.logical_height);
-	SDL_WarpMouseInWindow(g_aeron.window, (float)raw_x, (float)raw_y);
+	if (!g_aeron.headless) {
+		SDL_WarpMouseInWindow(g_aeron.window, (float)raw_x, (float)raw_y);
+	}
 
 	g_aeron.input.window_width         = window_width;
 	g_aeron.input.window_height        = window_height;
@@ -344,7 +350,7 @@ int Aeron_SetRelativeMouseMode(int enabled) {
 		return 0;
 	}
 
-	if (!SDL_SetWindowRelativeMouseMode(g_aeron.window, enabled)) {
+	if (!g_aeron.headless && !SDL_SetWindowRelativeMouseMode(g_aeron.window, enabled)) {
 		Aeron_LogWarn("aeron", "SDL_SetWindowRelativeMouseMode failed: %s", SDL_GetError());
 		return 0;
 	}
