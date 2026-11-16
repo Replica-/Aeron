@@ -339,8 +339,12 @@ typedef enum AeronUiControllerCaptureResult {
 	AERON_UI_CONTROLLER_CAPTURE_CANCELLED,
 } AeronUiControllerCaptureResult;
 
-/* Captures one source from a specific connected controller instance. An
- * instance id of zero renders a disabled row. */
+/* Listens to every connected controller; the result names the one used. */
+#define AERON_UI_CONTROLLER_ANY UINT32_MAX
+
+/* Captures one source from a specific connected controller instance, or from
+ * any controller with AERON_UI_CONTROLLER_ANY. An instance id of zero, or ANY
+ * with no controller connected, renders a disabled row. */
 AeronUiControllerCaptureResult AeronUi_ControllerCapture(AeronUiContext* ctx, const char* label,
 														 const char*                         display,
 														 const AeronUiControllerCaptureDesc* desc,

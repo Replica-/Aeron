@@ -93,14 +93,20 @@ typedef struct UiScrollRec {
 	float     content_h;
 } UiScrollRec;
 
+/* One controller a capture listens to, with its controls at the start. */
+typedef struct UiControllerCaptureDevice {
+	uint32_t            instance_id; /* 0 = slot unused */
+	AeronControllerKind controller_kind;
+	int16_t             axis_baseline[AERON_CONTROLLER_AXIS_MAX];
+	uint8_t             hat_armed[AERON_CONTROLLER_HAT_MAX];
+} UiControllerCaptureDevice;
+
 typedef struct UiControllerCaptureState {
 	AeronUiId                    id;
-	uint32_t                     instance_id;
-	AeronControllerKind          controller_kind;
+	uint32_t                     instance_id; /* as requested: one controller or AERON_UI_CONTROLLER_ANY */
 	AeronUiControllerCaptureMode mode;
 	float                        elapsed;
-	int16_t                      axis_baseline[AERON_CONTROLLER_AXIS_MAX];
-	uint8_t                      hat_armed[AERON_CONTROLLER_HAT_MAX];
+	UiControllerCaptureDevice    devices[AERON_CONTROLLER_MAX];
 } UiControllerCaptureState;
 
 typedef struct UiKeyboardCaptureState {
