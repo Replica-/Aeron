@@ -345,12 +345,32 @@ bool Aeron_OptModelBuildMemory(const void* bytes, size_t size, const char* label
 		view.meshes += options->mesh_first;
 		view.mesh_count = options->mesh_count;
 	}
+	opt_mesh_t* kept = NULL;
+	if (options->mesh_skip_count) {
+		kept = malloc((size_t)(view.mesh_count > 0 ? view.mesh_count : 1) * sizeof *kept);
+		if (!kept) {
+			opt_free(source);
+			return opt_model_error(error, 1, "out of memory for OPT mesh selection");
+		}
+		const int first = options->mesh_count > 0 ? options->mesh_first : 0;
+		int       count = 0;
+		for (int32_t index = 0; index < view.mesh_count; ++index) {
+			bool skip = false;
+			for (size_t s = 0; s < options->mesh_skip_count && !skip; ++s)
+				skip = options->mesh_skip[s] == first + index;
+			if (!skip)
+				kept[count++] = view.meshes[index];
+		}
+		view.meshes     = kept;
+		view.mesh_count = count;
+	}
 
 	OptGltfAlphaOverride* alpha_overrides = NULL;
 	if (options->alpha_override_count) {
 		alpha_overrides = calloc(options->alpha_override_count, sizeof *alpha_overrides);
 		if (!alpha_overrides) {
 			opt_free(source);
+			free(kept);
 			return opt_model_error(error, 1, "out of memory for OPT alpha overrides");
 		}
 		for (size_t index = 0; index < options->alpha_override_count; ++index) {
@@ -371,6 +391,7 @@ bool Aeron_OptModelBuildMemory(const void* bytes, size_t size, const char* label
 	free(alpha_overrides);
 	if (!converted) {
 		opt_free(source);
+		free(kept);
 		return opt_model_error(error, 3, parser_error.msg);
 	}
 	if (options->material_override_count)
@@ -378,6 +399,7 @@ bool Aeron_OptModelBuildMemory(const void* bytes, size_t size, const char* label
 	if (!build_opt_semantics(&view, out)) {
 		OptGltf_Free(document);
 		opt_free(source);
+		free(kept);
 		Aeron_FlightModelFree(out);
 		return opt_model_error(error, 4, "could not build OPT native semantics");
 	}
@@ -394,6 +416,7 @@ bool Aeron_OptModelBuildMemory(const void* bytes, size_t size, const char* label
 	OptGltf_Free(document);
 	if (!cooked) {
 		opt_free(source);
+		free(kept);
 		Aeron_FlightModelFree(out);
 		return opt_model_error(error, 4,
 							   context.render_build_failed
@@ -401,6 +424,7 @@ bool Aeron_OptModelBuildMemory(const void* bytes, size_t size, const char* label
 								   : "in-memory OPT texture cooking failed");
 	}
 	opt_free(source);
+	free(kept);
 	if (options->emissive) {
 		for (uint32_t index = 0; index < out->render.material_count; ++index) {
 			AeronGltfMaterial* material = &out->render.materials[index];

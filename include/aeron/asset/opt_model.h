@@ -28,6 +28,10 @@ typedef struct AeronOptModelBuildOptions {
 	/* Builds only meshes [mesh_first, mesh_first + mesh_count); 0 = all. */
 	int                                 mesh_first;
 	int                                 mesh_count;
+	/* Mesh indices (into the whole OPT) left out of the model, as an XWA
+	 * object profile hides them. */
+	const int*                          mesh_skip;
+	size_t                              mesh_skip_count;
 } AeronOptModelBuildOptions;
 
 typedef struct AeronOptAlphaOverride {
