@@ -32,6 +32,8 @@ typedef struct AeronOptModelBuildOptions {
 	 * object profile hides them. */
 	const int*                          mesh_skip;
 	size_t                              mesh_skip_count;
+	/* Multiplies every material's base color (not its emission); 0 = 1. */
+	float                               base_color_scale;
 } AeronOptModelBuildOptions;
 
 typedef struct AeronOptAlphaOverride {

@@ -433,5 +433,9 @@ bool Aeron_OptModelBuildMemory(const void* bytes, size_t size, const char* label
 				material->emissive_strength *= options->emissive_strength;
 		}
 	}
+	if (options->base_color_scale > 0.0f)
+		for (uint32_t index = 0; index < out->render.material_count; ++index)
+			for (int k = 0; k < 3; ++k)
+				out->render.materials[index].base_color_factor[k] *= options->base_color_scale;
 	return true;
 }
