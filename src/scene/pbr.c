@@ -41,7 +41,7 @@ typedef struct AeronScenePbrVsBlock {
 	uint32_t previous_table_index;
 	uint32_t local_light_base;
 	uint32_t local_light_count;
-	uint32_t _pad_storage;
+	float    world_light_scale;
 	float    prev_view_proj[16];
 	float    prev_model_to_world[16];
 } AeronScenePbrVsBlock; /* 368 B */
@@ -441,6 +441,7 @@ static void pbr_push_instance_uniforms(struct AeronScene3D* s, AeronRenderPass* 
 	vsb.previous_table_index = vel ? prepared->previous_table_index : prepared->current_table_index;
 	vsb.local_light_base     = prepared->local_light_base;
 	vsb.local_light_count    = prepared->local_light_count;
+	vsb.world_light_scale    = in->world_light_scale > 0.0f ? in->world_light_scale : 1.0f;
 	Aeron_BindUniformData(pass, AERON_SHADER_STAGE_VERTEX, 0, &vsb, sizeof vsb);
 
 	(void)depth_only;

@@ -30,7 +30,8 @@ cbuffer GltfMeshVSUniforms : register(b0, space1) {
 	uint previous_table_index;
 	uint local_light_base;
 	uint local_light_count;
-	uint _pad_storage;
+	/* Multiplies the sun, extra directional and sky light; 1 = unchanged. */
+	float world_light_scale;
 	/* Previous transforms used by the velocity-producing vertex variants. */
 	row_major float4x4 prev_view_proj;
 	row_major float4x4 prev_craft_to_world;

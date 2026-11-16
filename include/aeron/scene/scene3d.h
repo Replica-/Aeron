@@ -120,6 +120,10 @@ typedef struct AeronSceneMeshInstance {
 	/* Skip receive-side local lighting (TIE: projectile bolts, which
 	 * are themselves light sources). */
 	int no_local_lights;
+	/* Multiplies the sun, extra directional and sky light it receives (not
+	 * its local lights or emission); 0 = unchanged. TIE: a cockpit interior,
+	 * which takes no shadows, that sunlight would otherwise wash out. */
+	float world_light_scale;
 	/* Force zero velocity in the motion-vector prepass: project prev
 	 * through the CURRENT camera with the current transform (TIE:
 	 * spawn-frame objects with no matched previous pose — camera-

@@ -30,6 +30,7 @@ PbrForwardVSOut main(VSIn input)
 		output.variant_row_base = 0u;
 		output.variant_group_count = 0u;
 		output.material_count = 0u;
+		output.world_light_scale = 1.0f;
 		return output;
 	}
 
@@ -81,5 +82,6 @@ PbrForwardVSOut main(VSIn input)
 	output.variant_row_base = variant_row_base;
 	output.variant_group_count = variant_group_count;
 	output.material_count = material_count;
+	output.world_light_scale = world_light_scale;
 	return output;
 }

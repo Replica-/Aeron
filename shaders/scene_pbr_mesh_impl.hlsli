@@ -136,7 +136,7 @@ FSOut main(PbrForwardVSOut i, bool is_front : SV_IsFrontFace)
     float wrap_n = saturate((ndotl + light_wrap) / (1.0f + light_wrap));
     wrap_n = lerp(wrap_n, wrap_n * wrap_n, light_wrap);
     float  lambert_term = saturate(wrap_n * light_intensity);
-    float3 ambient_rgb  = world_ambient(N) + detailed_environment(N);
+    float3 ambient_rgb  = (world_ambient(N) + detailed_environment(N)) * i.world_light_scale;
     uint shadow_cascade = 4u;
     float shadow_cascade_blend = 0.0f;
     float shadow_coverage = 0.0f;
@@ -166,6 +166,9 @@ FSOut main(PbrForwardVSOut i, bool is_front : SV_IsFrontFace)
                 shadow_cascade_blend, shadow_coverage);
         }
     }
+    /* An instance can take less of the world's light (sun diffuse and
+     * specular here; the sky above, extra directionals below). */
+    shadow_visibility *= i.world_light_scale;
 
     /* AO occludes ambient fully; it occludes the direct diffuse only by
      * `ssao_direct` (0 = physically correct ambient-only, 1 = direct
@@ -178,6 +181,7 @@ FSOut main(PbrForwardVSOut i, bool is_front : SV_IsFrontFace)
     [unroll] for (int ed = 0; ed < 3; ed++) {
         extra_rgb += saturate(dot(N, fs_extra_dir[ed].xyz)) * fs_extra_col[ed].rgb;
     }
+    extra_rgb *= i.world_light_scale;
     float3 base_rgb = albedo *
         ((sun_color * lambert_term * shadow_visibility + extra_rgb) * ao_direct + ambient_rgb * ao +
          i.local_rgb);

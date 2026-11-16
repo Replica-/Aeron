@@ -26,6 +26,7 @@ struct PbrForwardVSOut {
 	nointerpolation uint  variant_row_base : TEXCOORD7;
 	nointerpolation uint  variant_group_count : TEXCOORD8;
 	nointerpolation uint  material_count : TEXCOORD9;
+	nointerpolation float world_light_scale : TEXCOORD10;
 };
 
 struct PbrPrepassVSOut {
